@@ -307,6 +307,9 @@ def select_carrier_and_generate():
     shipping_date = selected_date_var.get()
     delivery_instructions = get_delivery_instructions(inside_var, tailgate_var, appointment_var, two_man_var, white_glove_var)
     add_info_7 = ", ".join(delivery_instructions[:2])
+    if add_info_7:  
+        add_info_7 += ","
+    
     add_info_8 = ", ".join(delivery_instructions[2:]) + " Delivery"
 
     # Prepare the data map for the PDF generation
@@ -322,10 +325,10 @@ def select_carrier_and_generate():
         quote_price,
         tracking_number,
         weight,
-        skid_dimensions
+        skid_dimensions,
+        add_info_7,  # AddInfo7
+        add_info_8   # AddInfo8
     )
-    data_map['AddInfo7'] = add_info_7
-    data_map['AddInfo8'] = add_info_8
     data_map['Date'] = shipping_date
 
     # Ensure the output directory exists (organized by date)
@@ -345,7 +348,9 @@ def select_carrier_and_generate():
         order_numbers,
         quote_number,
         quote_price,
-        weight
+        weight,
+        add_info_7,  # Pass AddInfo7
+        add_info_8   # Pass AddInfo8
     )
 
     if output_pdf_filled:
