@@ -302,10 +302,75 @@ def select_carrier_and_generate():
     if not result:
         show_error_message("Error", f"No record found for Order Number: {order_numbers[0]}")
         return
+def select_carrier_and_generate():
+    """
+    Generate the BOL PDF and update the database based on the input.
+    """
+
+    from pdf_generator import generate_bol, prepare_data_map
+    from helpers import validate_skid_count, clean_text_refined
+    from utils import ensure_directory_exists_with_date
+    from database import update_shipping_data  # Ensure this is imported
+
+    log_info("Starting BOL generation process.")
+
+    # Validate the inputs before proceeding
+    if not validate_inputs():
+        return
+
+    # Gather user inputs
+    carrier_choice = carrier_var.get()  # Get the selected carrier
+
+    # Check if "Other" carrier is selected
+    if carrier_choice == 7:  # Assuming "Other" carrier is mapped to 7
+        carrier_name = simpledialog.askstring("Input", "Enter carrier name:").upper()  # Convert to all caps
+        if not carrier_name:
+            show_error_message("Carrier Selection Error", "Carrier name cannot be empty.")
+            return
+    else:
+        if carrier_choice not in CARRIER_OPTIONS:
+            show_error_message("Carrier Selection Error", "Please select a valid carrier.")
+            return
+        carrier_name = CARRIER_OPTIONS[carrier_choice]  # Get the carrier name
+
+    # Check if the order_numbers list is populated
+    if not order_numbers:  # Ensure this is populated before usage
+        show_error_message("Order Number Error", "Please enter at least one order number.")
+        return
+
+    # Fetch order data based on the first order number
+    result = fetch_order_data(order_numbers[0])
+    if not result:
+        show_error_message("Order Data Error", f"No record found for Order Number: {order_numbers[0]}")
+        return
+
+    # Automatically set the tracking number to the first order number if not FF/NFF
+    tracking_number = order_numbers[0] if carrier_name not in ['FF', 'NFF'] else tracking_number_entry.get().strip()
+
+    skid_count_entry_value = skid_count_entry.get().strip()  # Get the skid count entry value
+    skid_count = int(skid_count_entry_value)  # Convert to integer
+    skid_cartons = int(skid_cartons_entry.get().strip())  # Get the number of cartons for skids
+    quote_number = quote_number_entry.get().strip()  # Get the quote number from GUI
+    quote_price = quote_price_entry.get().strip()  # Get the quote price from GUI
+    weight = weight_entry.get().strip()  # Get the weight from GUI
+    skid_dimensions = [entry for entry in skid_listbox.get(0, tk.END)]  # Get skid dimensions from the listbox
+
+    # Validate skid count (skip for KPS carrier)
+    if carrier_name != 'KPS':
+        if not validate_skid_count(
+            carrier_choice,
+            skid_count_entry,  # Pass the entry widget itself
+            skid_dimensions,
+            CARRIER_OPTIONS,
+            show_error_message
+        ):
+            return
 
     # Get selected shipping date and delivery instructions
     shipping_date = selected_date_var.get()
     delivery_instructions = get_delivery_instructions(inside_var, tailgate_var, appointment_var, two_man_var, white_glove_var)
+
+    # Prepare AddInfo fields (AddInfo7 and AddInfo8)
     add_info_7 = ", ".join(delivery_instructions[:2])
     if add_info_7:  
         add_info_7 += ","
@@ -364,6 +429,7 @@ def select_carrier_and_generate():
     else:
         show_error_message("Error", "Failed to generate the PDF.")
         log_error("PDF generation failed.")
+
 
 def edit_selected_item():
     """Edit the selected item (order number or skid dimension) in the listbox."""
