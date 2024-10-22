@@ -1,17 +1,6 @@
 import re  # For regular expression matching and splitting
 import tkinter as tk  # For creating dialog boxes
-from tkinter import messagebox  # For error or info dialogs (if needed)
-
-# Import validation functions from utils
 from utils import validate_alphanumeric, validate_numeric_field
-
-# Import logging functions from utils
-from utils import log_info, log_error
-
-# Import any other necessary functions from utils
-from utils import center_text_x, adjust_font_size, CURRENT_DATE
-
-
 
 def format_city_province(city_province_str):
     """
@@ -230,3 +219,29 @@ def validate_carrier_fields(carrier_choice, tracking_number_entry, quote_number_
 
     return True
 
+def get_delivery_instructions(inside_var, tailgate_var, appointment_var, two_man_var, white_glove_var):
+    """
+    Gather selected delivery instructions based on the states of checkboxes.
+    Args:
+        inside_var (tk.BooleanVar): Boolean for 'Inside Delivery'.
+        tailgate_var (tk.BooleanVar): Boolean for 'Tailgate Delivery'.
+        appointment_var (tk.BooleanVar): Boolean for 'Appointment Delivery'.
+        twoman_var (tk.BooleanVar): Boolean for '2-Man Delivery'.
+        whiteglove_var (tk.BooleanVar): Boolean for 'White Glove Delivery'.
+    Returns:
+        list: A list of selected delivery instructions.
+    """
+    instructions = []
+
+    if inside_var.get():
+        instructions.append("Inside")
+    if tailgate_var.get():
+        instructions.append("Tailgate")
+    if appointment_var.get():
+        instructions.append("Appointment")
+    if two_man_var.get():
+        instructions.append("2-Man")
+    if white_glove_var.get():
+        instructions.append("White Glove")
+    
+    return instructions
