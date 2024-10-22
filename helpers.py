@@ -109,10 +109,15 @@ def clean_text_refined(text):
 def validate_skid_count(carrier_choice, skid_count_entry, skid_dimensions, CARRIER_OPTIONS, show_error_message):
     """
     Validate the skid count to ensure it matches the number of skid dimensions entered.
+    For KPS, bypass the skid dimension validation and allow direct entry of skid count.
     """
     try:
         # Convert the entry value to an integer
         entered_skid_count = int(skid_count_entry.get())
+
+        # Skip validation if the carrier is KPS
+        if CARRIER_OPTIONS[carrier_choice] == 'KPS':
+            return True  # No need to validate dimensions for KPS
 
         # Calculate the actual skid count by excluding carpets and boxes
         actual_skid_count = sum(1 for dim in skid_dimensions if "(C)" not in dim and "(B)" not in dim)
@@ -130,7 +135,6 @@ def validate_skid_count(carrier_choice, skid_count_entry, skid_dimensions, CARRI
     except ValueError:
         show_error_message("Invalid Input", "Please enter a valid skid count.")
         return False
-
 
 def process_order_number(order_number):
     """
