@@ -76,7 +76,7 @@ def populate_skid_dimensions(data_map, skid_dimensions):
         data_map[desc_fields[i]] = ', '.join(group)
 
 
-def prepare_data_map(result, skid_count, carpet_count, box_count, skid_cartons, order_numbers, carrier_name, quote_number, quote_price, tracking_number, weight, skid_dimensions):
+def prepare_data_map(result, skid_count, carpet_count, box_count, skid_cartons, order_numbers, carrier_name, quote_number, quote_price, tracking_number, weight, skid_dimensions, add_info_7, add_info_8):
     """
     Prepare the data map for filling the PDF based on user inputs and order data.
     """
@@ -94,7 +94,9 @@ def prepare_data_map(result, skid_count, carpet_count, box_count, skid_cartons, 
         'HU_QTY_3': str(box_count) if box_count > 0 else '',
         'Pkg_QTY_1': str(skid_cartons),
         'PRO': tracking_number,
-        'WT_1': f"{weight} LBS." if weight else ""  # Weight field passed from the GUI
+        'WT_1': f"{weight} LBS." if weight else "",
+        'AddInfo7': add_info_7,
+        'AddInfo8': add_info_8
     }
 
     # Handle multiple order numbers with commas
@@ -132,7 +134,6 @@ def prepare_data_map(result, skid_count, carpet_count, box_count, skid_cartons, 
         'FromName': 'LOUISE KOOL & GALT',
         'FromAddr': '2123 MCCOWAN ROAD',
         'FromCityStateZip': 'SCARBOROUGH, ON. M1S 3Y6',
-        'AddInfo8': 'INSIDE DELIVERY & TAILGATE DELIVERY',
         'Prepaid': '     X',
         'Page_ttl': '     1',
         'Desc_1': 'CHILDCARE MATERIALS/FURNITURE',
@@ -156,6 +157,7 @@ def prepare_data_map(result, skid_count, carpet_count, box_count, skid_cartons, 
         data_map['HU_Type_3'] = "BOXES"  # Boxes
 
     return data_map
+
 
 def generate_labels(doc, result, carrier_name, skid_count, carpet_count, box_count, tracking_number, output_folder_with_date):
     """
@@ -334,7 +336,7 @@ def generate_shipping_label_on_page(doc, carrier_name, receiver_city, full_addre
     page.insert_text((reference_x, tracking_bottom_line + 30), reference_text, fontsize=small_font, fontname="helv", fill=(0, 0, 0))
 
 
-def generate_bol(result, carrier_name, tracking_number, skid_count, carpet_count, box_count, skid_cartons, output_folder, skid_dimensions, order_numbers, quote_number, quote_price, weight):
+def generate_bol(result, carrier_name, tracking_number, skid_count, carpet_count, box_count, skid_cartons, output_folder, skid_dimensions, order_numbers, quote_number, quote_price, weight, add_info_7, add_info_8):
     # Safely generate a filename for the output PDF
     ssd_shipment_id = result['SSD_SHIPMENT_ID'].strip()  # Strip any excess whitespace
     safe_order_number = ssd_shipment_id.replace('.', '_').strip()  # Replace dots in shipment ID with underscores and strip
@@ -345,7 +347,7 @@ def generate_bol(result, carrier_name, tracking_number, skid_count, carpet_count
     # Prepare the data map (include skid_dimensions and order_numbers as an argument)
     data_map = prepare_data_map(
         result, skid_count, carpet_count, box_count, skid_cartons, order_numbers, 
-        carrier_name, quote_number, quote_price, tracking_number, weight, skid_dimensions)
+        carrier_name, quote_number, quote_price, tracking_number, weight, skid_dimensions, add_info_7, add_info_8)  # Include add_info_7 and add_info_8
 
     # Call the fill_pdf function to fill the template PDF with data
     if fill_pdf(template_pdf_path, output_pdf_filled, data_map):
