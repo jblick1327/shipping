@@ -73,8 +73,12 @@ def populate_skid_dimensions(data_map, skid_dimensions):
     desc_fields = ['Desc_2', 'Desc_3', 'Desc_4', 'Desc_5', 'Desc_6', 'Desc_7', 'Desc_8']
 
     for i, group in enumerate(dim_groups):
-        data_map[desc_fields[i]] = ', '.join(group)
-
+        # Filter out any dimension starting with "N/A"
+        filtered_group = [dim for dim in group if not dim.startswith("N/A")]
+        
+        # If there are valid dimensions left after filtering, add them to the data map
+        if filtered_group:
+            data_map[desc_fields[i]] = ', '.join(filtered_group)
 
 def prepare_data_map(result, skid_count, carpet_count, box_count, skid_cartons, order_numbers, carrier_name, quote_number, quote_price, tracking_number, weight, skid_dimensions, add_info_7, add_info_8):
     """
@@ -92,7 +96,7 @@ def prepare_data_map(result, skid_count, carpet_count, box_count, skid_cartons, 
         'HU_QTY_1': str(skid_count) if skid_count > 0 else '',
         'HU_QTY_2': str(carpet_count) if carpet_count > 0 else '',
         'HU_QTY_3': str(box_count) if box_count > 0 else '',
-        'Pkg_QTY_1': str(skid_cartons),
+        'Pkg_QTY_1': str(skid_cartons - carpet_count),
         'PRO': tracking_number,
         'WT_1': f"{weight} LBS." if weight else "",
         'AddInfo7': add_info_7,
@@ -157,99 +161,6 @@ def prepare_data_map(result, skid_count, carpet_count, box_count, skid_cartons, 
         data_map['HU_Type_3'] = "BOXES"  # Boxes
 
     return data_map
-
-
-def generate_labels(doc, result, carrier_name, skid_count, carpet_count, box_count, tracking_number, output_folder_with_date):
-    """
-    Generate and add shipping labels for skids, carpets, or boxes to the PDF document.
-    
-    Args:
-        doc (fitz.Document): The PDF document to which the labels will be added.
-        result (dict): Data fetched from the database.
-        carrier_name (str): The name of the carrier.
-        skid_count (int): Number of skids.
-        carpet_count (int): Number of carpets.
-        box_count (int): Number of boxes.
-        tracking_number (str): The tracking number for the shipment.
-        output_folder_with_date (str): The folder where the labels will be saved.
-    """
-    total_items = skid_count + carpet_count + box_count  # Total number of items to label
-
-    formatted_city_province = format_city_province(result['SSD_SHIP_TO_4'])
-    full_address = f"{result['SSD_SHIP_TO']}\n{result['SSD_SHIP_TO_2']}\n{formatted_city_province}\n{result['SSD_SHIP_TO_POSTAL']}"
-
-
-    # Call the label generation function
-    generate_shipping_label_on_page(
-        doc, 
-        carrier_name, 
-        result['SSD_SHIP_TO_4'],  # City or equivalent field
-        full_address,  # The full address string formatted as needed
-        f"{current_item}/{total_items}", 
-        tracking_number, 
-        reference_number
-)
-
-
-    # Generate labels for each item
-    current_item = 1
-    reference_number = result['SSD_SHIPMENT_ID'].strip()  # Use the shipment ID as the reference number
-
-    # Generate labels for skids
-    for _ in range(skid_count):
-        generate_shipping_label_on_page(
-            doc,
-            carrier_name,
-            result['SSD_SHIP_TO_4'],  # Receiver city
-            result['SSD_SHIP_TO'],     # Full address
-            f"{current_item}/{total_items}",  # Item label (e.g., 1/4)
-            tracking_number,
-            reference_number
-        )
-        current_item += 1
-
-    # Generate labels for carpets
-    for i in range(1, carpet_count + 1):
-        label_suffix = f"{i}C/{carpet_count}C"  # Carpets are labeled with "C"
-        generate_shipping_label_on_page(
-            doc,
-            carrier_name,
-            result['SSD_SHIP_TO_4'],  # Receiver city
-            result['SSD_SHIP_TO'],     # Full address
-            f"{current_item}/{total_items}",  # Item label (e.g., 1/4)
-            tracking_number,
-            reference_number,
-            label_suffix  # Carpet label suffix
-        )
-        current_item += 1
-
-    # Generate labels for boxes
-    for i in range(1, box_count + 1):
-        label_suffix = f"{i}B/{box_count}B"  # Boxes are labeled with "B"
-        generate_shipping_label_on_page(
-            doc,
-            carrier_name,
-            result['SSD_SHIP_TO_4'],  # Receiver city
-            result['SSD_SHIP_TO'],     # Full address
-            f"{current_item}/{total_items}",  # Item label (e.g., 1/4)
-            tracking_number,
-            reference_number,
-            label_suffix  # Box label suffix
-        )
-        current_item += 1
-
-    # Save the label PDF to the specified folder
-    label_output_pdf = os.path.join(output_folder_with_date, f"{carrier_name}_shipping_labels.pdf")
-    doc.save(label_output_pdf)
-    doc.close()
-
-    # Log the success
-    log_info(f"Shipping labels successfully generated at: {label_output_pdf}")
-
-    # Auto-open the labels PDF
-    os.startfile(label_output_pdf)  # Open the labels PDF automatically
-
-
 
 def generate_shipping_label_on_page(doc, carrier_name, receiver_city, full_address, item_label, tracking_number, reference_number, label_suffix=""):
     """
@@ -317,7 +228,7 @@ def generate_shipping_label_on_page(doc, carrier_name, receiver_city, full_addre
 
     # Adjust the bottom line for the tracking number and date placement
     tracking_bottom_line = small_font_y + 40 if label_suffix else bottom_line + 40
-    if tracking_number:
+    if tracking_number and tracking_number.strip() != reference_number.strip(): #Preventing placeholder Tracking numbers
         tracking_text = f"Tracking # {tracking_number.strip()}"
         x = center_text_x(page, tracking_text, small_font, part=2, total_parts=2)
         page.insert_text((x, tracking_bottom_line), tracking_text, fontsize=small_font, fontname="helv", fill=(0, 0, 0))
@@ -347,7 +258,7 @@ def generate_bol(result, carrier_name, tracking_number, skid_count, carpet_count
     # Prepare the data map (include skid_dimensions and order_numbers as an argument)
     data_map = prepare_data_map(
         result, skid_count, carpet_count, box_count, skid_cartons, order_numbers, 
-        carrier_name, quote_number, quote_price, tracking_number, weight, skid_dimensions, add_info_7, add_info_8)  # Include add_info_7 and add_info_8
+        carrier_name, quote_number, quote_price, tracking_number, weight, skid_dimensions, add_info_7, add_info_8)
 
     # Call the fill_pdf function to fill the template PDF with data
     if fill_pdf(template_pdf_path, output_pdf_filled, data_map):
@@ -368,25 +279,31 @@ def generate_bol(result, carrier_name, tracking_number, skid_count, carpet_count
         # The reference number is the shipment ID, strip any extra whitespace
         reference_number = result['SSD_SHIPMENT_ID'].strip()
 
-        # Generate labels for skids
-        for _ in range(skid_count):
-            generate_shipping_label_on_page(doc, carrier_name, result['SSD_SHIP_TO_4'], full_address, f"{current_item}/{total_items}", tracking_number, reference_number)
-            current_item += 1
+        # Ensure at least one label is generated
+        if carrier_name == 'PARCEL PRO':
+            total_items = 1  # Ensure there's at least one label
+            generate_shipping_label_on_page(doc, carrier_name, result['SSD_SHIP_TO_4'], full_address, f"{skid_cartons} PCES.", tracking_number, reference_number)
+        else:
+            # Generate labels for skids
+            for _ in range(skid_count):
+                generate_shipping_label_on_page(doc, carrier_name, result['SSD_SHIP_TO_4'], full_address, f"{current_item}/{total_items}", tracking_number, reference_number)
+                current_item += 1
 
-        # Generate labels for carpets
-        for i in range(1, carpet_count + 1):
-            label_suffix = f"{i}C/{carpet_count}C"
-            generate_shipping_label_on_page(doc, carrier_name, result['SSD_SHIP_TO_4'], full_address, f"{current_item}/{total_items}", tracking_number, reference_number, label_suffix)
-            current_item += 1
+            # Generate labels for carpets
+            for i in range(1, carpet_count + 1):
+                label_suffix = f"{i}C/{carpet_count}C"
+                generate_shipping_label_on_page(doc, carrier_name, result['SSD_SHIP_TO_4'], full_address, f"{current_item}/{total_items}", tracking_number, reference_number, label_suffix)
+                current_item += 1
 
-        # Generate labels for boxes
-        for i in range(1, box_count + 1):
-            label_suffix = f"{i}B/{box_count}B"
-            generate_shipping_label_on_page(doc, carrier_name, result['SSD_SHIP_TO_4'], full_address, f"{current_item}/{total_items}", tracking_number, reference_number, label_suffix)
-            current_item += 1
+            # Generate labels for boxes
+            for i in range(1, box_count + 1):
+                label_suffix = f"{i}B/{box_count}B"
+                generate_shipping_label_on_page(doc, carrier_name, result['SSD_SHIP_TO_4'], full_address, f"{current_item}/{total_items}", tracking_number, reference_number, label_suffix)
+                current_item += 1
 
         # Save and open the label PDF
         doc.save(output_pdf_label)
+        doc.close()
         log_info(f"Shipping label successfully generated at: {output_pdf_label}")
 
         # Automatically open the BOL PDF
@@ -399,4 +316,5 @@ def generate_bol(result, carrier_name, tracking_number, skid_count, carpet_count
     else:
         log_error("Failed to generate BOL PDF.")
         return None
+
 
