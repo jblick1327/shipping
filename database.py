@@ -85,7 +85,6 @@ def get_odbc_order_data(order_number):
     finally:
         connection.close()
 
-# Update shipping data based on the selected database mode (mock or ODBC)
 def update_shipping_data(order_number, tracking_number, carrier, weight, total_cartons, quote_price):
     """Update shipping data for the given order based on the current database mode."""
     if DB_MODE == 'mock':
@@ -95,6 +94,7 @@ def update_shipping_data(order_number, tracking_number, carrier, weight, total_c
     else:
         log_error(f"Invalid database mode: {DB_MODE}")
 
+
 # Simulate updating shipping data in mock mode (no actual changes made)
 def mock_update_shipping_data(order_number, tracking_number, carrier, weight, total_cartons, quote_price):
     """Simulate updating shipping data in mock mode (testing)."""
@@ -102,7 +102,6 @@ def mock_update_shipping_data(order_number, tracking_number, carrier, weight, to
     log_info(f"Order Number: {order_number}, Carrier: {carrier}, Weight: {weight}, Cartons: {total_cartons}, Quote Price: {quote_price}")
     # This is a mock update; no actual changes to the CSV
 
-# Update shipping data in ODBC mode (production mode)
 def update_odbc_shipping_data(order_number, tracking_number, carrier, weight, total_cartons, quote_price):
     """Update shipping data in the ODBC database."""
     try:
@@ -116,7 +115,11 @@ def update_odbc_shipping_data(order_number, tracking_number, carrier, weight, to
 
         if record:
             # Prepare and execute the update query
-            current_time = datetime.datetime.now().date().isoformat()
+            current_time = datetime.datetime.now().strftime('%Y-%m-%d')  # Ensure correct date format
+            weight = float(weight) if weight else 0.00  # Ensure numeric format with two decimal places
+            total_cartons = float(total_cartons) if total_cartons else 0.00  # Ensure numeric format with two decimal places
+            quote_price = float(quote_price) if quote_price else 0.00  # Ensure numeric format with two decimal places
+            
             update_query = """
                 UPDATE OESHPU
                 SET DATESHIP = ?, COSTCENTER = ?, SHIPVIA = ?, WEIGHTLBS = ?, PIECES = ?, FREIGHT = ?
@@ -131,3 +134,5 @@ def update_odbc_shipping_data(order_number, tracking_number, carrier, weight, to
         log_error(f"Error updating record for Order Number {order_number}: {e}")
     finally:
         connection.close()  # Ensure the connection is always closed
+
+
