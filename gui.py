@@ -147,14 +147,21 @@ def add_skid_dimension(event=None):
     global skid_count, carpet_count, box_count  # Update global counters
 
     carrier_name = CARRIER_OPTIONS.get(carrier_var.get(), "")
-    
-    # Restrict skid shipments for specific carriers (e.g., PARCEL PRO)
-    if carrier_name == 'PARCEL PRO' and classification_var.get() == "Skid":
-        show_error_message("Invalid Operation", "PARCEL PRO does not support Skid shipments.")
-        return
 
-    dimension_str = skid_dimension_entry.get().strip()
-    processed_dimensions = process_skid_dimensions(dimension_str)
+        # Prevent adding dimensions if the carrier is Parcel Pro
+    if carrier_name == 'PARCEL PRO':
+        show_error_message(
+            "Input Restriction",
+            "Parcel Pro only accepts individual items. Please enter the total item count in the 'Cartons' box instead."
+        )
+        return  # Exit the function without adding to skid_dimensions
+    
+    # For KPS, skip dimension validation and use a default value
+    if carrier_name == 'KPS':
+        processed_dimensions = "N/A"  # Use a default placeholder
+    else:
+        dimension_str = skid_dimension_entry.get().strip()
+        processed_dimensions = process_skid_dimensions(dimension_str)
 
     if processed_dimensions:
         # Tag the dimension with its classification (Skid, Carpet, Box)
@@ -175,6 +182,11 @@ def add_skid_dimension(event=None):
         # Update the skid count if applicable
         update_skid_count()
         log_info(f"Added dimension: {processed_dimensions} | Skid Count: {skid_count}, Carpet Count: {carpet_count}, Box Count: {box_count}")
+    else:
+        # Show an error if the dimension validation failed (for non-KPS/Parcel Pro)
+        if carrier_name not in ['KPS', 'PARCEL PRO']:
+            show_error_message("Invalid Input", "Please enter a valid dimension format (e.g., 62x45x33).")
+
 
 def process_skid_dimensions(dimension_str):
     """
@@ -252,63 +264,10 @@ def validate_inputs():
 
 def select_carrier_and_generate():
     """
-    Generate the BOL PDF and update shipping data in the database based on user inputs.
-    This function validates the inputs, gathers the required data, and performs the necessary operations.
-    """
-    from pdf_generator import generate_bol, prepare_data_map
-    from helpers import validate_skid_count, clean_text_refined
-    from utils import ensure_directory_exists_with_date
-    from database import update_shipping_data
-
-    log_info("Starting BOL generation process.")
-
-    # Validate the inputs before proceeding
-    if not validate_inputs():
-        return
-
-    # Gather the selected carrier and other user inputs
-    carrier_choice = carrier_var.get()
-    if carrier_choice == 7:  # Custom carrier option
-        carrier_name = simpledialog.askstring("Input", "Enter carrier name:").upper()
-        if not carrier_name:
-            show_error_message("Carrier Selection Error", "Carrier name cannot be empty.")
-            return
-    else:
-        if carrier_choice not in CARRIER_OPTIONS:
-            show_error_message("Carrier Selection Error", "Please select a valid carrier.")
-            return
-        carrier_name = CARRIER_OPTIONS[carrier_choice]
-
-    # Process the rest of the input data
-    skid_count_entry_value = skid_count_entry.get().strip()
-    skid_count = int(skid_count_entry_value)
-    skid_cartons = int(skid_cartons_entry.get().strip())
-    quote_number = quote_number_entry.get().strip()
-    quote_price = quote_price_entry.get().strip()
-    weight = weight_entry.get().strip()
-    skid_dimensions = [entry for entry in skid_listbox.get(0, tk.END)]
-    tracking_number = order_numbers[0] if carrier_name not in ['FF', 'NFF'] else tracking_number_entry.get().strip()
-
-    # Validate the skid count again
-    if not validate_skid_count(carrier_choice, skid_count_entry, skid_dimensions, CARRIER_OPTIONS, show_error_message):
-        return
-
-    if not order_numbers:
-        show_error_message("Error", "Please enter at least one order number.")
-        return
-
-    # Fetch order data for the first order number
-    result = fetch_order_data(order_numbers[0])
-    if not result:
-        show_error_message("Error", f"No record found for Order Number: {order_numbers[0]}")
-        return
-def select_carrier_and_generate():
-    """
     Generate the BOL PDF and update the database based on the input.
     """
-
     from pdf_generator import generate_bol, prepare_data_map
-    from helpers import validate_skid_count, clean_text_refined
+    from helpers import validate_skid_count
     from utils import ensure_directory_exists_with_date
     from database import update_shipping_data  # Ensure this is imported
 
@@ -332,7 +291,7 @@ def select_carrier_and_generate():
             show_error_message("Carrier Selection Error", "Please select a valid carrier.")
             return
         carrier_name = CARRIER_OPTIONS[carrier_choice]  # Get the carrier name
-
+   
     # Check if the order_numbers list is populated
     if not order_numbers:  # Ensure this is populated before usage
         show_error_message("Order Number Error", "Please enter at least one order number.")
@@ -355,6 +314,13 @@ def select_carrier_and_generate():
     weight = weight_entry.get().strip()  # Get the weight from GUI
     skid_dimensions = [entry for entry in skid_listbox.get(0, tk.END)]  # Get skid dimensions from the listbox
 
+    # Calculate the number of carpets and boxes
+    carpet_count = sum(1 for dim in skid_dimensions if "(C)" in dim)
+    box_count = sum(1 for dim in skid_dimensions if "(B)" in dim)
+
+    # Calculate total cartons (skid cartons + carpets + boxes)
+    total_cartons = skid_cartons # + carpet_count + box_count (Commenting out so number can be directly inputted)
+
     # Validate skid count (skip for KPS carrier)
     if carrier_name != 'KPS':
         if not validate_skid_count(
@@ -370,12 +336,14 @@ def select_carrier_and_generate():
     shipping_date = selected_date_var.get()
     delivery_instructions = get_delivery_instructions(inside_var, tailgate_var, appointment_var, two_man_var, white_glove_var)
 
-    # Prepare AddInfo fields (AddInfo7 and AddInfo8)
-    add_info_7 = ", ".join(delivery_instructions[:2])
-    if add_info_7:  
-        add_info_7 += ","
-    
-    add_info_8 = ", ".join(delivery_instructions[2:]) + " Delivery"
+    if len(delivery_instructions) <= 3:
+        # If 3 or fewer instructions, fit them all in AddInfo8
+        add_info_7 = ""  # No need for AddInfo7
+        add_info_8 = ", ".join(delivery_instructions) + " Delivery"
+    else:
+        # Split the instructions between AddInfo7 and AddInfo8
+        add_info_7 = ", ".join(delivery_instructions[:2]) + ","  # Add a trailing comma
+        add_info_8 = ", ".join(delivery_instructions[2:]) + " Delivery"
 
     # Prepare the data map for the PDF generation
     data_map = prepare_data_map(
@@ -424,11 +392,12 @@ def select_carrier_and_generate():
         # Update the shipping data for each order number in the database
         for order_number in order_numbers:
             log_info(f"Updating shipping data for Order Number: {order_number}")
-            update_shipping_data(order_number, carrier_name, tracking_number, skid_dimensions, skid_count, weight)
+            update_shipping_data(order_number, tracking_number, carrier_name, weight, total_cartons, quote_price)
             log_info(f"Successfully updated shipping data for Order Number: {order_number}")
     else:
         show_error_message("Error", "Failed to generate the PDF.")
         log_error("PDF generation failed.")
+
 
 
 def edit_selected_item():
@@ -506,6 +475,7 @@ def clear_contents():
     weight_entry.delete(0, tk.END)
     skid_cartons_entry.delete(0, tk.END)
     skid_count_entry.delete(0, tk.END)
+    skid_count_entry.insert(0, "0")  
     quote_price_entry.delete(0, tk.END)
     quote_number_entry.delete(0, tk.END)
     selected_date_var.set(CURRENT_DATE)
@@ -554,6 +524,7 @@ skid_listbox.pack(pady=5)
 tk.Label(frame_right, text="Skid Count:").pack(pady=5)
 skid_count_entry = tk.Entry(frame_right, width=5)
 skid_count_entry.pack(pady=5)
+skid_count_entry.insert(0, "0")
 
 # Carrier Selection Section
 tk.Label(root, text="Select Carrier:").pack(pady=10)
