@@ -115,9 +115,20 @@ def validate_skid_count(carrier_choice, skid_count_entry, skid_dimensions, CARRI
         # Convert the entry value to an integer
         entered_skid_count = int(skid_count_entry.get())
 
-        # Skip validation if the carrier is KPS
-        if CARRIER_OPTIONS[carrier_choice] == 'KPS':
-            return True  # No need to validate dimensions for KPS
+        # Skip validation for Parcel Pro and KPS carriers
+        carrier_name = CARRIER_OPTIONS[carrier_choice]
+        if carrier_name == 'PARCEL PRO':
+            # Check if there are any entries in skid_dimensions for Parcel Pro
+            if skid_dimensions:
+                show_error_message(
+                    "Input Restriction",
+                    "Parcel Pro only accepts individual items. Please enter the total item count in the 'Cartons' box and remove any skids, carpets, or boxes."
+                )
+                return False  # Return False to indicate validation failure
+            return True  # No further validation needed for Parcel Pro
+        
+        if carrier_name == 'KPS':
+            return True  # No further validation needed for KPS
 
         # Calculate the actual skid count by excluding carpets and boxes
         actual_skid_count = sum(1 for dim in skid_dimensions if "(C)" not in dim and "(B)" not in dim)
@@ -129,12 +140,13 @@ def validate_skid_count(carrier_choice, skid_count_entry, skid_dimensions, CARRI
                 f"Entered skid count is {entered_skid_count}, but the actual number of skids is {actual_skid_count}."
             )
             return False
-        
+
         return True
 
     except ValueError:
         show_error_message("Invalid Input", "Please enter a valid skid count.")
         return False
+
 
 def process_order_number(order_number):
     """
